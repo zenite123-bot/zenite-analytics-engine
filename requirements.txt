@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+sentry-sdk
+pydantic
+slowapi
+pandas
+numpy
+redis
+stripe
+supabase
+python-dotenv
