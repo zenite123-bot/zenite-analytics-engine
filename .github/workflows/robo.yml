@@ -1,8 +1,8 @@
-name: Robô Alimentador Zenite
+name: Robo Alimentador Zênite
 
 on:
   schedule:
-    - cron: '0 9 * * *'  # Roda às 06:00 horário de Brasília
+    - cron: '0 9 * * *'
   workflow_dispatch:
 
 jobs:
@@ -10,23 +10,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Baixar código do repositório
-        uses: actions/checkout@v4
+    - name: Baixar código do repositório
+      uses: actions/checkout@v4
 
-      - name: Preparar o ambiente Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+    - name: Preparar o ambiente Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-      - name: Instalar bibliotecas
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests python-dotenv supabase
+    - name: Instalar bibliotecas
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests python-dotenv
 
-      - name: Executar o Robô
-        env:
-          URL_SUPABASE: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-        run: |
-          python robo_alimentador.py
+    - name: Executar o Robô
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+      run: |
+        python robo_alimentador.py
