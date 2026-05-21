@@ -1,16 +1,17 @@
 import os
 import json
+import time
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
-# 1. Carrega as chaves secretas do arquivo .env
+# Carrega as chaves secretas
 load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip('/')
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 ODDS_API_KEY = os.getenv("ODDS_API_KEY", "")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "") # Certifique-se de ter essa chave no seu .env
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 HEADERS = {
     "apikey": SUPABASE_KEY,
@@ -29,9 +30,10 @@ def limpar_jogos_antigos():
         print(f"Erro ao limpar banco: {e}")
 
 def analisar_jogo_com_gemini(time_casa, time_fora, liga_nome, cotacao_casa):
-    """Aciona a Inteligência Artificial para gerar palpites realistas de Gols e Escanteios"""
+    """Aciona a Inteligência Artificial para gerar palpites de Gols e Escanteios"""
     print(f"🤖 Inteligência Artificial analisando: {time_casa} x {time_fora}...")
     
+    # URL 100% limpa, sem formatação de colchetes
     url_gemini = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
     
     prompt = f"""
@@ -40,15 +42,15 @@ def analisar_jogo_com_gemini(time_casa, time_fora, liga_nome, cotacao_casa):
     Cotação atual para vitória do {time_casa}: {cotacao_casa}.
 
     Gere previsões estritamente baseadas em probabilidades matemáticas para as próximas colunas:
-    1. Sugestão de Escanteios (Ex: "Mais de 8.5 escanteios", "Entre 9 e 11 cantos")
-    2. Tendência de Gols (Ex: "Mais de 1.5 gols", "Ambos Marcam - Sim", "Jogo truncado, menos de 2.5 gols")
-    3. Análise do Jogo (Um resumo de quem tem vantagem ou se tende a empate)
+    1. Sugestão de Escanteios (Ex: "Mais de 8.5 escanteios")
+    2. Tendência de Gols (Ex: "Mais de 1.5 gols")
+    3. Análise do Jogo (Um resumo curto)
 
-    Responda EXCLUSIVAMENTE em formato JSON puro, sem formatação markdown (sem ```json), exatamente com esta estrutura de chaves:
+    Responda EXCLUSIVAMENTE em formato JSON puro, sem formatação markdown (sem ```json), exatamente com esta estrutura:
     {{
-        "escanteios": "sua previsao curta aqui",
-        "tendencia_gols": "sua tendencia curta aqui",
-        "justificativa": "seu resumo curto de analise aqui"
+        "escanteios": "sua previsao aqui",
+        "tendencia_gols": "sua tendencia aqui",
+        "justificativa": "seu resumo aqui"
     }}
     """
     
@@ -58,14 +60,12 @@ def analisar_jogo_com_gemini(time_casa, time_fora, liga_nome, cotacao_casa):
         response = requests.post(url_gemini, json=payload)
         if response.status_code == 200:
             texto_ia = response.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-            # Garante a limpeza de caracteres extras que a IA possa colocar
             if texto_ia.startswith("```"):
                 texto_ia = texto_ia.split("```")[1].replace("json", "").strip()
             return json.loads(texto_ia)
     except Exception as e:
         print(f"⚠️ Falha na análise da IA: {e}")
         
-    # Caso falhe, retorna um padrão seguro para não travar o app
     return {
         "escanteios": "Análise de cantos indisponível",
         "tendencia_gols": "Análise de mercado padrão",
@@ -75,7 +75,6 @@ def analisar_jogo_com_gemini(time_casa, time_fora, liga_nome, cotacao_casa):
 def rodar_robo_alimentador():
     limpar_jogos_antigos()
     
-    # Campeonatos mundiais e nacionais configurados
     ligas_alvo = [
         {"key": "soccer_brazil_campeonato", "nome": "Brasileirão Série A"},
         {"key": "soccer_uefa_champs_league", "nome": "Champions League"},
@@ -86,6 +85,8 @@ def rodar_robo_alimentador():
     
     for liga in ligas_alvo:
         print(f"⚽ Buscando rodadas de: {liga['nome']}...")
+        
+        # URL 100% limpa, sem formatação de colchetes
         url_odds = f"[https://api.the-odds-api.com/v4/sports/](https://api.the-odds-api.com/v4/sports/){liga['key']}/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=h2h"
         
         try:
@@ -101,19 +102,19 @@ def rodar_robo_alimentador():
                 time_fora = jogo.get("away_team")
                 nome_evento = f"{time_casa} x {time_fora}"
                 
-                # Formata Data e Horário
                 data_iso = jogo.get("commence_time")
                 data_formatada = "Hoje"
                 horario_formatado = "--:--"
                 if data_iso:
                     try:
+                        # Ajuste de fuso horário do Brasil (-3h)
                         dt = datetime.strptime(data_iso, "%Y-%m-%dT%H:%M:%SZ")
-                        data_formatada = dt.strftime("%d/%m/%Y")
-                        horario_formatado = dt.strftime("%H:%M")
+                        dt_brasil = dt - timedelta(hours=3)
+                        data_formatada = dt_brasil.strftime("%d/%m/%Y")
+                        horario_formatado = dt_brasil.strftime("%H:%M")
                     except Exception:
                         pass
                 
-                # Extrai as Cotações Básicas
                 cotacao_atual = 2.00
                 prob_vitoria = 0.50
                 try:
@@ -127,10 +128,9 @@ def rodar_robo_alimentador():
                 except Exception:
                     pass
 
-                # 🤖 CHAMA A INTELIGÊNCIA ARTIFICIAL PARA OS CAMPOS QUE ESTÃO CARREGANDO
+                # Chama a IA para análise
                 analise_ia = analisar_jogo_com_gemini(time_casa, time_fora, liga["nome"], cotacao_atual)
 
-                # Monta a estrutura batendo exatamente com as colunas do seu Supabase
                 dados_jogo = {
                     "event_id": event_id,
                     "nome_evento": nome_evento,
@@ -146,17 +146,20 @@ def rodar_robo_alimentador():
                     "justificativa": analise_ia.get("justificativa")
                 }
                 
-                # Envia para a tabela eventos_predicao no Supabase
+                # Salva no banco de dados
                 url_insert = f"{SUPABASE_URL}/rest/v1/eventos_predicao"
                 res_ins = requests.post(url_insert, headers=HEADERS, json=dados_jogo)
                 
                 if res_ins.status_code in [200, 201, 204]:
-                    print(f"🚀 Previsões completas salvas para: {nome_evento}")
+                    print(f"🚀 Previsões salvas para: {nome_evento}")
                 else:
                     print(f"⚠️ Erro ao salvar {nome_evento}: {res_ins.text}")
+                
+                # Pausa para não bloquear a API
+                time.sleep(3)
                     
         except Exception as e:
-            print(f"Falha de conexão na liga {liga['nome']}: {e}")
+            print(f"Falha ao processar a liga {liga['nome']}: {e}")
 
 if __name__ == "__main__":
     rodar_robo_alimentador()
